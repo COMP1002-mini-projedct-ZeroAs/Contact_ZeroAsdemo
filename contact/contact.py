@@ -1,5 +1,6 @@
 import JSON
 import re
+import TRIE
 class Contact:
     def __init__(self,path:str):
         self.CATEGORYDIR = {}
@@ -25,7 +26,7 @@ class Contact:
                     if(not tmp):
                         tmp=self.searchList[i][num]={}
                     tmp[people["name"]]=True
-                    fuzzyStr+=num+chr(0)
+                    fuzzyStr+=chr(0)+num
             self.PEOPLEFUZZY[people["name"]]=fuzzyStr.lower()
     def getUserInput(self):
         inputN = 0
@@ -40,11 +41,21 @@ class Contact:
         print(self.contacts)
         print(self.searchList)
         print(self.PEOPLEFUZZY)
-    def fuzzySearch(self,search:str):
-        search=search.lower()
-        for name in self.PEOPLEFUZZY:
-            if(search in self.PEOPLEFUZZY[name]):
-                self.showOnePeople(name)
+    def fuzzySearch(self,search:str|list):
+        def doingSomethingWhenSearched(name):
+            self.showOnePeople(name)
+        if (type(search)==type([])):
+            root = TRIE.TrieNode()
+            TRIE.buildTrie(root,search)
+            TRIE.buildFailPointers(root)
+            for name in self.PEOPLEFUZZY:
+                if(TRIE.search(self.PEOPLEFUZZY[name],root)):
+                    doingSomethingWhenSearched(name)
+        else:
+            search=search.lower()
+            for name in self.PEOPLEFUZZY:
+                if(search in self.PEOPLEFUZZY[name]):
+                    doingSomethingWhenSearched(name)
     def showOnePeople(self,people:str):
         print("Name:",self.contacts[people]["name"])
         print("Phone Number:",*self.contacts[people]["number"])
@@ -94,12 +105,18 @@ class Contact:
             return
         self.contacts[name]["categories"].append("{{Everyone")
         self.addPersonToType(name,"{{Everyone",self.CATEGORYDIR) #Everyone is everyone
+        fuzzyStr = name
+        if self.PEOPLEFUZZY.get(name):
+            fuzzyStr=""
+        else:
+            self.PEOPLEFUZZY[name]=""
         for i in range(len(self.searchList)):
             for data in newDatas[i]:
                 self.contacts[name][self.searchWords[i]].append(data)
                 self.addPersonToType(name,data,self.searchList[i])
+                fuzzyStr+=chr(0)+data
             self.contacts[name][self.searchWords[i]] = list(set(self.contacts[name][self.searchWords[i]]))#UNIQUE
-
+            self.PEOPLEFUZZY[name]+=fuzzyStr.lower()
     def save(self):
         handle = open(self.filePath,"w")
         handle.write(JSON.stringify(self.contacts))
@@ -249,7 +266,11 @@ class Console:
         elif(mode == "F"):
             searchWords = None
             if(len(types)>0 and types[0][0]=="-q"):
-                searchWords=types[0][1][0]
+                searchWords=types[0][1]
+                ind_tmp = len(searchWords)-1
+                while(ind_tmp>=0):
+                    searchWords[ind_tmp] = searchWords[ind_tmp].lower()
+                    ind_tmp-=1
             else:
                 searchWords = curDataInput
             #print(searchWords)
