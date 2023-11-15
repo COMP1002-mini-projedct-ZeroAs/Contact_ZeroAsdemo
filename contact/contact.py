@@ -11,6 +11,25 @@ def flatten(deepDict):
         else:
             flattened.append(val)
     return flattened
+def deep_copy(deepDict):
+    dictType = type(deepDict)==dict
+    newDict = None
+    if(dictType):
+        newDict = {}
+    else:
+        newDict = []
+    for sth in deepDict:
+        if(dictType):
+            if(type(deepDict[sth]) == list or type(deepDict[sth]) == dict):
+                newDict[sth]=deep_copy(deepDict[sth])
+            else:
+                newDict[sth]=deepDict[sth]
+        else:
+            if(type(sth) == list or type(sth) == dict):
+                newDict.append(deep_copy(sth))
+            else:
+                newDict.append(sth)
+    return newDict
 class Contact:
     def __init__(self,path:str):
         self.CATEGORYDIR = {}
@@ -110,6 +129,19 @@ class Contact:
                 if(len(self.searchList[i][cate])==0):
                     del self.searchList[i][cate]
             self.contacts[name][self.searchWords[i]]=[]
+        for tag in self.contacts[name]["tags"]:
+            for cate in self.contacts[name]["tags"][tag]:
+                del self.CATEGORYDIR[cate][name]
+                if(len(self.CATEGORYDIR[cate])==0):
+                    del self.CATEGORYDIR[cate]
+            self.contacts[name]["tags"][tag]=[]
+    def deletePerson(self,name:str):
+        tmp = self.contacts.get(name)
+        if(not tmp):
+            return
+        self.removeAllPersonReversedList(name)
+        del self.contacts[name]#here we cant use tmp because tmp is going to return
+        return tmp
     def addPerson(self,name:str,mode:str,newDatas:list = []):
         def defaultMode():
             self.contacts[name]={
@@ -121,7 +153,6 @@ class Contact:
         if(mode=="cover" or mode=="update"):
             if(mode == "update"):
                 words = self.searchWords+["tags"]
-                print(newDatas)
                 for i in range(len(newDatas)):
                     if(newDatas[i]==None or len(newDatas[i])==0):
                         newDatas[i]=self.contacts[name][words[i]]
@@ -132,7 +163,7 @@ class Contact:
             if(not name in self.contacts):
                 defaultMode()
         else:
-            return
+            return True
         self.contacts[name]["tags"]["{{systemDefault"] = self.contacts[name]["tags"].get("{{systemDefault",[]);
         self.contacts[name]["tags"]["{{systemDefault"].append("{{Everyone")
         self.addPersonToType(name,"{{Everyone",self.CATEGORYDIR) #Everyone is everyone
@@ -165,9 +196,8 @@ class Contact:
         handle.write(JSON.stringify(self.contacts))
         handle.close()
 class Console:
-    def __init__(self):
-        self.con = Contact("test.contact")
-        self.waitForInput()
+    def __init__(self,path:str):
+        self.con = Contact(path)
     def waitForInput(self):
         res=True
         try:
@@ -207,6 +237,8 @@ class Console:
         #   -mode b/c/u (blend/cover/update)
         #  For F:
         #   -q search words
+        #  For M
+        #   -<n/p/e/c> data -o modify
         tmpValue = ""
         ind = 1
         while(ind<strLen):
@@ -279,10 +311,10 @@ class Console:
                         name = input("Enter Name >>> ")
                 else:
                     print("Name Invalid")
-                    return
+                    return True
             if(not self.con.contacts.get(name) and update):
                 print("User does not exists.")
-                return
+                return True
             if(not silence and self.con.contacts.get(name) and not cover):
                 print("Already exists, cover? (Y/N)")
                 if(self.con.getUserInput()):
@@ -294,7 +326,7 @@ class Console:
                     if(not silence):
                         while(True):
                             pNumber = input(["Number(s) (Press Enter To End): ","Email(s) (Press Enter To End): "][i])
-                            if(i==0 and not re.match("[0-9]+",pNumber)):
+                            if(i==0 and not re.match("^[0-9]*$",pNumber)):
                                 break
                             elif(i==1 and not re.match("[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",pNumber)):
                                 break
@@ -310,6 +342,8 @@ class Console:
                         pVal = input("Categories (Press Enter To End): ")
                         if(len(pVal)==0):
                             break
+                        if(pField[:2]=="{{"):
+                            pField=pField[2:]
                         if(len(pField)==0):
                             pField="{{systemDefault"
                         create[2][pField] = create[2].get(pField,[])
@@ -334,11 +368,82 @@ class Console:
                 searchWords = curDataInput
             #print(searchWords)
             self.con.fuzzySearch(searchWords)
+        elif(mode == "M"):
+            moded = {}
+            lastCommand = "-n"
+            name = ""
+            phone = None#modify only one phone number
+            email = None#modify only one email number
+            oriInformation:dict = None
+            modTag = None
+            modTagOnce = None#mod a tag's which category
+            for t in types:
+                if(t[0]=="-o" and len(t[1])>0):
+                    moded[lastCommand] = t[1]
+                elif(t[0]=="-n" and len(t[1])>0):
+                    lastCommand=t[0]
+                    name = t[1][0]
+                elif((t[0]=="-p" or t[0]=="-e")):
+                    lastCommand=t[0]
+                    if(len(t[1])>0):
+                        if(t[0]=="-p"):
+                            phone=t[1][0]
+                        else:
+                            email=t[1][0]
+                elif(t[0]=="-c" and len(t[1])>0):
+                    lastCommand=t[0]
+                    modTag = t[1][0]
+                    if(len(t[1])>1):
+                        modTagOnce = t[1][1]
+            if(len(name)==0 or not self.con.contacts.get(name)):
+                return True
+            else:
+                def basicIndex(lst,val):
+                    l = len(lst)
+                    i_ = 0
+                    while(i_<l):
+                        if lst[i_] == val:
+                            return i_
+                        i_+=1
+                    return None
+                #create a copy to avoid change to originalData
+                oriInformation = deep_copy(self.con.contacts.get(name))
+                if(moded.get("-n")):
+                    name=moded["-n"][0]
+                if(moded.get("-p")):
+                    if(phone):
+                        pos = basicIndex(oriInformation["number"],phone)
+                        if(pos):
+                            oriInformation["number"][pos]=moded["-p"][0]
+                    else:
+                        oriInformation["number"]=moded["-p"]
+                if(moded.get("-e")):
+                    if(email):
+                        pos = basicIndex(oriInformation["email"],email)
+                        if(pos):
+                            oriInformation["email"][pos]=moded["-e"][0]
+                    else:
+                        oriInformation["email"]=moded["-e"]
+                if(moded.get("-c")):
+                    if(modTagOnce):
+                        pos = basicIndex(oriInformation["tags"][modTag],modTagOnce)
+                        if(pos):
+                            oriInformation["tags"][modTag][pos]=moded["-c"][0]
+                    else:
+                        oriInformation["tags"][modTag] = moded["-c"]
+                for number in oriInformation["number"]:
+                    if(not re.match("^[0-9]*$",number)):
+                        print("Invalid phone number modification")
+                        return True
+                for email in oriInformation["email"]:
+                    if(not re.match("[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",email)):
+                        print("Invalid email modification")
+                        return True
+                self.con.deletePerson(oriInformation["name"])
+                self.con.addPerson(name,"cover",[oriInformation["number"],oriInformation["email"],oriInformation["tags"]])
         else:
             return False
         return True
 
-                        
-                    
-
-con = Console()
+con = Console("test.contact")
+con.waitForInput()
