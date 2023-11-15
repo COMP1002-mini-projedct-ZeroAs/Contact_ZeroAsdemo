@@ -93,9 +93,3 @@ def parse(jsonStr):
     return tmpValue
 def stringify(dict__):
     return str(dict__)
-#print(parseJSON("{'1':1,'2':2,\"wssb\":\"wssb\",'dan':[1,2,3,4,5]}"))
-#handle = open("test.txt","r+")
-#dict_ = parse(handle.read())
-#print(dict_)
-#handle = open("test.txt","w+")
-#handle.write(str(dict_))
