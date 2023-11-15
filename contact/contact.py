@@ -1,6 +1,16 @@
 import JSON
 import re
 import TRIE
+def flatten(deepDict):
+    flattened = []
+    for key,val in enumerate(deepDict):
+        if(type(val)==list or type(val)==dict):
+            flattened+=flatten(val)
+        elif type(deepDict)==dict:
+            flattened.append(deepDict[val])
+        else:
+            flattened.append(val)
+    return flattened
 class Contact:
     def __init__(self,path:str):
         self.CATEGORYDIR = {}
@@ -15,8 +25,9 @@ class Contact:
             self.contacts = {}
         self.filePath = path
         tmp = None
-        self.searchList = [self.CATEGORYDIR,self.NUMBERDIR,self.EMAILDIR]
-        self.searchWords = ["categories","number","email"]
+        self.searchList = [self.NUMBERDIR,self.EMAILDIR]
+        self.searchWords = ["number","email"]
+        #create reversed dictionary, initialize fuzzyStr and link referenceKey
         for people in self.contacts:
             fuzzyStr = people
             people=self.contacts[people]
@@ -27,6 +38,15 @@ class Contact:
                         tmp=self.searchList[i][num]={}
                     tmp[people["name"]]=True
                     fuzzyStr+=chr(0)+num
+            
+            for key in people["tags"]:
+                for num in people["tags"][key]:
+                    tmp=self.CATEGORYDIR.get(num)
+                    if(not tmp):
+                        tmp=self.CATEGORYDIR[num]={}
+                    tmp[people["name"]]=True
+                    fuzzyStr+=chr(0)+num
+
             self.PEOPLEFUZZY[people["name"]]=fuzzyStr.lower()
     def getUserInput(self):
         inputN = 0
@@ -60,6 +80,10 @@ class Contact:
         print("Name:",self.contacts[people]["name"])
         print("Phone Number:",*self.contacts[people]["number"])
         print("Email:",*self.contacts[people]["email"])
+        for key in self.contacts[people]["tags"]:
+            if(key[:2]=="{{"):
+                continue
+            print(key+":",*self.contacts[people]["tags"][key])
         print()
     def showContacts(self,filter:dict,exclude:bool=False):
         willShow = set()
@@ -92,9 +116,15 @@ class Contact:
                 "name":name,
                 "number":[],
                 "email":[],
-                "categories":[]
+                "tags":{}
             }
-        if(mode=="cover"):
+        if(mode=="cover" or mode=="update"):
+            if(mode == "update"):
+                words = self.searchWords+["tags"]
+                print(newDatas)
+                for i in range(len(newDatas)):
+                    if(newDatas[i]==None or len(newDatas[i])==0):
+                        newDatas[i]=self.contacts[name][words[i]]
             if name in self.contacts:
                 self.removeAllPersonReversedList(name)
             defaultMode()
@@ -103,10 +133,11 @@ class Contact:
                 defaultMode()
         else:
             return
-        self.contacts[name]["categories"].append("{{Everyone")
+        self.contacts[name]["tags"]["{{systemDefault"] = self.contacts[name]["tags"].get("{{systemDefault",[]);
+        self.contacts[name]["tags"]["{{systemDefault"].append("{{Everyone")
         self.addPersonToType(name,"{{Everyone",self.CATEGORYDIR) #Everyone is everyone
         fuzzyStr = name
-        if self.PEOPLEFUZZY.get(name):
+        if self.PEOPLEFUZZY.get(name) and (mode == "blend"):
             fuzzyStr=""
         else:
             self.PEOPLEFUZZY[name]=""
@@ -114,9 +145,21 @@ class Contact:
             for data in newDatas[i]:
                 self.contacts[name][self.searchWords[i]].append(data)
                 self.addPersonToType(name,data,self.searchList[i])
-                fuzzyStr+=chr(0)+data
+                fuzzyStr+=chr(0)+str(data)
             self.contacts[name][self.searchWords[i]] = list(set(self.contacts[name][self.searchWords[i]]))#UNIQUE
-            self.PEOPLEFUZZY[name]+=fuzzyStr.lower()
+        if(type(newDatas[2])==dict):
+            tags = self.contacts[name]["tags"]
+            for key in newDatas[2]:
+                if(not tags.get(key)):
+                    tags[key]=[]
+                for data in newDatas[2][key]:
+                    tags[key].append(data)
+                    self.addPersonToType(name,data,self.CATEGORYDIR)
+                    fuzzyStr+=chr(0)+str(data)
+                tags[key] = list(set(tags[key]))
+        #add full fuzzyStr to oriFUZZYSTR
+        self.PEOPLEFUZZY[name]+=fuzzyStr.lower()
+
     def save(self):
         handle = open(self.filePath,"w")
         handle.write(JSON.stringify(self.contacts))
@@ -161,7 +204,7 @@ class Console:
         #   -c category,category...
         #   -e emails,emails
         #   -y silence mode
-        #   -Y silence cover mode
+        #   -mode b/c/u (blend/cover/update)
         #  For F:
         #   -q search words
         tmpValue = ""
@@ -212,20 +255,23 @@ class Console:
             create = [None,None,None]
             silence = False
             cover = False
+            update = False
             for t in types:
                 if(t[0]=="-p"):
                     create[0] = t[1]
                 elif(t[0]=="-e"):
                     create[1] = t[1]
                 elif(t[0]=="-c"):
-                    create[2] = t[1]
+                    create[2] = {"{{systemDefault":t[1]}
                 elif(t[0]=="-y"):
                     silence = True
-                elif(t[0]=="-Y"):
-                    silence = True
-                    cover=True
                 elif(t[0]=="-n" and len(t[1])>0):
                     name = t[1][0]
+                elif(t[0]=="-mode" and len(t[1])>0):
+                    if(t[1][0]!="b"):
+                        cover=True
+                    if(t[1][0]=="u"):
+                        update=True
             #check some values
             if(name==None):
                 if(not silence):
@@ -234,32 +280,45 @@ class Console:
                 else:
                     print("Name Invalid")
                     return
+            if(not self.con.contacts.get(name) and update):
+                print("User does not exists.")
+                return
             if(not silence and self.con.contacts.get(name) and not cover):
                 print("Already exists, cover? (Y/N)")
                 if(self.con.getUserInput()):
                     cover=True
-            for i in range(3):
+            #enter phoneNumber and others
+            for i in range(0,2):
                 if(create[i]==None):
                     create[i]=[]
                     if(not silence):
                         while(True):
-                            pNumber = input(["Number(s) (Press Enter To End): ","Email(s) (Press Enter To End): ","Categories (Press Enter To End): "][i])
+                            pNumber = input(["Number(s) (Press Enter To End): ","Email(s) (Press Enter To End): "][i])
                             if(i==0 and not re.match("[0-9]+",pNumber)):
                                 break
                             elif(i==1 and not re.match("[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",pNumber)):
                                 break
-                            elif(i==2 and pNumber==""):
-                                break
                             create[i].append(pNumber)
 
                 create[i] = list(set(create[i]))#UNIQUE
-            #here is a struture design failure, sort from number email category to category number email
-            tmp = create[0]
-            create[0]=create[2]
-            create[2]=create[1]
-            create[1]=tmp
+            #enter Custom Fields & Categories
+            if(create[2]==None):
+                create[2]={}
+                if(not silence):
+                    while(True):
+                        pField = input("Custom Field (Press Enter To End): ")
+                        pVal = input("Categories (Press Enter To End): ")
+                        if(len(pVal)==0):
+                            break
+                        if(len(pField)==0):
+                            pField="{{systemDefault"
+                        create[2][pField] = create[2].get(pField,[])
+                        create[2][pField].append(pVal)
             if(cover):
-                cover="cover"
+                if(update):
+                    cover="update"
+                else:
+                    cover="cover"
             else:
                 cover="blend"
             self.con.addPerson(name,cover,create)

@@ -11,7 +11,8 @@ def translate(someObj):
             "false":False,
             "true":True,
             "False":False,
-            "True":True
+            "True":True,
+            "None":None
         }[someObj]
 def parse(jsonStr):
     maps = []
