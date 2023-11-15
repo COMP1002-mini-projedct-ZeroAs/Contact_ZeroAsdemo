@@ -386,25 +386,33 @@ class Console:
                 oriInformation = self.con.deletePerson(name)
                 if(moded.get("-n")):
                     name=moded["-n"][0]
-                elif(moded.get("-p")):
+                if(moded.get("-p")):
                     if(phone):
                         pos = basicIndex(oriInformation["number"],phone)
                         if(pos):
                             oriInformation["number"][pos]=moded["-p"][0]
                     else:
                         oriInformation["number"]=moded["-p"]
-                elif(moded.get("-e")):
+                if(moded.get("-e")):
                     if(email):
                         '''
                                 "number":[],
                                 "email":[],
                                 "tags":{}
                         '''
-                        pos = basicIndex(oriInformation["email"],phone)
+                        pos = basicIndex(oriInformation["email"],email)
                         if(pos):
                             oriInformation["email"][pos]=moded["-e"][0]
                     else:
                         oriInformation["email"]=moded["-e"]
+                if(moded.get("-c")):
+                    if(modTagOnce):
+                        pos = basicIndex(oriInformation["tags"][modTag],modTagOnce)
+                        if(pos):
+                            oriInformation["tags"][modTag][pos]=moded["-c"][0]
+                    else:
+                        oriInformation["tags"][modTag] = moded["-c"]
+                self.con.addPerson(name,"cover",[oriInformation["number"],oriInformation["email"],oriInformation["tags"]])
         else:
             return False
         return True
