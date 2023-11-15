@@ -14,6 +14,21 @@ def translate(someObj):
             "True":True,
             "None":None
         }[someObj]
+escapeList={
+    "\\":"\\",
+    "\'":"\'",
+    "\"":"\"",
+    "a":"\a",
+    "b":"\b",
+    "e":"\e",
+    "000":"\000",
+    "n":"\n",
+    "v":"\v",
+    "t":"\t",
+    "r":"\r",
+    "f":"\f",
+    "other":"\other"
+}
 def parse(jsonStr):
     maps = []
     islist = []
@@ -26,9 +41,10 @@ def parse(jsonStr):
     keyInputing=True
     quoting=[]
     qLen = 0#len of quoting marks
+    shifting=False
     while(i<strlen):
         #print(jsonStr[i],quoting,keys)
-        if(jsonStr[i]=="\"" or jsonStr[i]=="'"):
+        if((jsonStr[i]=="\"" or jsonStr[i]=="'") and not shifting):
             # type of quote marks:
             #    "''"
             #    "'"
@@ -43,6 +59,9 @@ def parse(jsonStr):
                 quoting.append(jsonStr[i])
                 qLen+=1
         if(qLen==0):
+            if(shifting):#close shifting if last word is a \
+                shifting=False
+                tmpValue+="\\"
             if(jsonStr[i]=="{"):
                 mLen+=1
                 maps.append({})
@@ -88,7 +107,22 @@ def parse(jsonStr):
                 #print(tmpValue,i)
                 tmpValue+=jsonStr[i]
         else:
-            tmpValue+=jsonStr[i]
+            if(shifting):
+                _esca = None
+                for j in range(1,6,2):
+                    _esca=escapeList.get(jsonStr[i:i+j])
+                    if(_esca):
+                        tmpValue+=_esca
+                        i+=j-1
+                        break
+                if(not _esca):
+                    tmpValue+="\\"+jsonStr[i]
+                shifting=False
+            else:
+                if(jsonStr[i]=="\\"):
+                    shifting=True
+                else:
+                    tmpValue+=jsonStr[i]
         i+=1
     return tmpValue
 def stringify(dict__):
