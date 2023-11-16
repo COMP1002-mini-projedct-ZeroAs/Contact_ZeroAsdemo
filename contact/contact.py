@@ -239,6 +239,7 @@ class Console:
         #   -q search words
         #  For M
         #   -<n/p/e/c> data -o modify
+        #  For D
         tmpValue = ""
         ind = 1
         while(ind<strLen):
@@ -441,6 +442,10 @@ class Console:
                         return True
                 self.con.deletePerson(oriInformation["name"])
                 self.con.addPerson(name,"cover",[oriInformation["number"],oriInformation["email"],oriInformation["tags"]])
+        elif(mode=="D"):
+            if(len(curDataInput)==0):
+                return True
+            self.con.deletePerson(curDataInput)
         else:
             return False
         return True
