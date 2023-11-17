@@ -32,6 +32,7 @@ def deep_copy(deepDict):
     return newDict
 class Contact:
     def __init__(self,path:str):
+        self.TAGDIR = {}
         self.CATEGORYDIR = {}
         self.NUMBERDIR = {}
         self.EMAILDIR = {}
@@ -59,13 +60,15 @@ class Contact:
                     fuzzyStr+=chr(0)+num
             
             for key in people["tags"]:
+                if(self.TAGDIR.get(key)==None):
+                    self.TAGDIR[key]={}
                 for num in people["tags"][key]:
                     tmp=self.CATEGORYDIR.get(num)
                     if(not tmp):
                         tmp=self.CATEGORYDIR[num]={}
                     tmp[people["name"]]=True
                     fuzzyStr+=chr(0)+num
-
+                    self.TAGDIR[key][num]=1
             self.PEOPLEFUZZY[people["name"]]=fuzzyStr.lower()
     def getUserInput(self):
         inputN = 0
@@ -95,14 +98,18 @@ class Contact:
             for name in self.PEOPLEFUZZY:
                 if(search in self.PEOPLEFUZZY[name]):
                     doingSomethingWhenSearched(name)
-    def showOnePeople(self,people:str):
-        print("Name:",self.contacts[people]["name"])
-        print("Phone Number:",*self.contacts[people]["number"])
-        print("Email:",*self.contacts[people]["email"])
+    def showOnePeople(self,people:str,indent=0):
+        print(indent*" ","Name: ",end="")
+        print(self.contacts[people]["name"])
+        print(indent*" ","Phone Number: ",end="")
+        print(*self.contacts[people]["number"])
+        print(indent*" ","Email: ",end="")
+        print(*self.contacts[people]["email"])
         for key in self.contacts[people]["tags"]:
             if(key[:2]=="{{"):
                 continue
-            print(key+":",*self.contacts[people]["tags"][key])
+            print(indent*" ",key+": ",end="")
+            print(*self.contacts[people]["tags"][key])
         print()
     def showContacts(self,filter:dict,exclude:bool=False):
         willShow = set()
@@ -114,6 +121,18 @@ class Contact:
         for people in willShow:
             self.showOnePeople(people)
         return
+    def ShowTag(self,tag:str):
+        if(self.TAGDIR.get(tag)==None):
+            return
+        willShow = set()
+        for key in self.TAGDIR[tag]:
+            if(self.CATEGORYDIR.get(key)==None):
+                del self.TAGDIR[tag][key]
+                continue
+            print(key+":")
+            for people in self.CATEGORYDIR[key]:
+                self.showOnePeople(people,4)
+            print("--------------------------------")
     def addInformationType(self,t_type:str,dictionary:dict):
         if(dictionary.get(t_type)):
             return
@@ -183,8 +202,11 @@ class Contact:
             for key in newDatas[2]:
                 if(not tags.get(key)):
                     tags[key]=[]
+                if(not self.TAGDIR[key]):
+                    self.TAGDIR[key] = {}
                 for data in newDatas[2][key]:
                     tags[key].append(data)
+                    self.TAGDIR[key][data]=1
                     self.addPersonToType(name,data,self.CATEGORYDIR)
                     fuzzyStr+=chr(0)+str(data)
                 tags[key] = list(set(tags[key]))
@@ -228,6 +250,7 @@ class Console:
         #  For L:
         #   -f only-filter-category   example:-f category,category...
         #   -fe exclude-filtered-category
+        # a tag
         #  For A:
         #   -n name
         #   -p numbers,numbers,...
@@ -239,6 +262,7 @@ class Console:
         #   -q search words
         #  For M
         #   -<n/p/e/c> data -o modify
+        #  For D
         tmpValue = ""
         ind = 1
         while(ind<strLen):
@@ -280,8 +304,10 @@ class Console:
                 for t in types[0][1]:
                     lst[t]=True
                 self.con.showContacts(lst,types[0][0]=="-fe")
-            else:
+            elif(curDataInput==""):
                 self.con.showContacts(lst,True)
+            else:
+                self.con.ShowTag(curDataInput)
         elif(mode=="A"):
             name = None
             create = [None,None,None]
@@ -441,6 +467,10 @@ class Console:
                         return True
                 self.con.deletePerson(oriInformation["name"])
                 self.con.addPerson(name,"cover",[oriInformation["number"],oriInformation["email"],oriInformation["tags"]])
+        elif(mode=="D"):
+            if(len(curDataInput)==0):
+                return True
+            self.con.deletePerson(curDataInput)
         else:
             return False
         return True
