@@ -66,7 +66,10 @@ class Contact:
                     tmp=self.CATEGORYDIR.get(num)
                     if(not tmp):
                         tmp=self.CATEGORYDIR[num]={}
-                    tmp[people["name"]]=True
+                    if(tmp.get(people["name"])):
+                        tmp[people["name"]]+=1
+                    else:
+                        tmp[people["name"]]=1
                     fuzzyStr+=chr(0)+num
                     self.TAGDIR[key][num]=1
             self.PEOPLEFUZZY[people["name"]]=fuzzyStr.lower()
@@ -202,7 +205,7 @@ class Contact:
             for key in newDatas[2]:
                 if(not tags.get(key)):
                     tags[key]=[]
-                if(not self.TAGDIR[key]):
+                if(not self.TAGDIR.get(key)):
                     self.TAGDIR[key] = {}
                 for data in newDatas[2][key]:
                     tags[key].append(data)
@@ -233,6 +236,8 @@ class Console:
             print("\n\nSAVING&QUITTING...")
             self.con.save()
     def exec(self,command:str):
+        if(len(command)==0):
+           return True
         if(command[-1]!=" "):
             command+=" "
         strLen = len(command)
@@ -352,9 +357,9 @@ class Console:
                     if(not silence):
                         while(True):
                             pNumber = input(["Number(s) (Press Enter To End): ","Email(s) (Press Enter To End): "][i])
-                            if(i==0 and not re.match("^[0-9]*$",pNumber)):
+                            if(i==0 and (not re.match("^[0-9]*$",pNumber) or len(pNumber)==0)):
                                 break
-                            elif(i==1 and not re.match("[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",pNumber)):
+                            elif(i==1 and (not re.match("[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",pNumber) or len(pNumber)==0)):
                                 break
                             create[i].append(pNumber)
 
